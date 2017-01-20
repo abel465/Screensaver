@@ -1,82 +1,188 @@
+from collections import OrderedDict
 import tkinter as tk
+# from sortedcontainers import SortedListWithKey
+import argparse
 from sys import stderr
 import os
 from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
+# import bisect
 
 PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-IMAGE_TIME = 1000
+IMAGE_TIME = 50
+BUFFER_LENGTH = 10
+
+def bisect_right(a, x):
+    """Return the index where to insert item x in list a, assuming a is sorted.
+
+    The return value i is such that all e in a[:i] have e <= x, and all e in
+    a[i:] have e > x.  So if x already appears in the list, a.insert(x) will
+    insert just after the rightmost x already there.
+
+    MODIFIED FROM bisect.bisect_right SOURCECODE
+    """
+
+    lo = 0
+    hi = len(a)
+    while lo < hi:
+        mid = (lo+hi) // 2
+        if x < a[mid][0]:
+            hi = mid
+        else: lo = mid + 1
+    return lo
+
+# def get_files(directory, indices, nums):
+#     n = 0
+#     # indices = [t[0] for t in v]
+#     for f in os.scandir(directory):
+#         if f.isfile and f.endswith(".png") or f.endswith(".jpg") or f.endswith(".svg"):
+#             if n in indices:
+#                 yield f.name, nums[indices.index(n)], directory
+#                 indices.remove(n)
+#                 if not indices:
+#                     return
+#             n += 1
 
 
-def main():
-	img = None
-	done = False
-	window = tk.Tk()
-	window.configure(background="black")
-	window.bind("<Key>", lambda e: e.widget.quit())
-	window.attributes("-fullscreen", True)
-	
-	maxwidth, maxheight = window.winfo_screenwidth(), window.winfo_screenheight()
-	
-	panel = tk.Label(window)
-	panel.pack()
-	
-	l = []
-	
-	def show_image(panel, seq):
-		nonlocal img, done
 
-		try:
-			path = next(seq)
-		except StopIteration:
-			if done:
-				print("finished")
-				window.destroy()
-			else:
-				done = True
-				print("Doing shuffled list")
-				show_image(panel, (f for f in l))
-			return
-		print(path)
-		try:
-			im = PIL.Image.open(path)
-			w, h = im.size
-			ratio = min(maxwidth/w, maxheight/h)
-			im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
-			img = PIL.ImageTk.PhotoImage(image=im)
-			panel.configure(image=img)
-		except (tk.TclError, OSError, IOError) as e: #  May not be real image
-			print(e, file=stderr)
-			panel.after(0, show_image, panel, seq)
-			return
-		panel.after(IMAGE_TIME, show_image, panel, seq)
-	
-	def get_paths(dirs, l):
-		for directory in dirs:
-			for path, dirs, files in os.walk(directory):
-				for f in files:
-					if f.endswith(".png") or f.endswith(".jpg"):
-						if not randrange(0, 1000):
-							yield path + "/" + f
-						else:
-							l.append(path + "/" + f)
-	
-		shuffle(l)
-		print("Finished making and shuffling list, length:", len(l))
+def main(paths):
+    img = None
+    window = tk.Tk()
+    window.configure(background="black")
+    window.bind("<Key>", lambda e: e.widget.quit())
+    window.attributes("-fullscreen", True)
 
-	
-	#pp = "/media/abel/abel_hd/Pictures/abstract/800 Impressive Abstract Full HD Wallpapers 1920 X 1080"
-	#pp = "/media/abel/abel_hd/Pictures"
-	pp = "/home/abel/Pictures"
-	seq = get_paths((pp,), l)
-	show_image(panel, seq)
-	
-	window.mainloop()
+    maxwidth, maxheight = window.winfo_screenwidth(), window.winfo_screenheight()
 
-	
+    panel = tk.Label(window)
+    panel.pack()
+
+    directory_locations = []
+
+    def show_images(panel, seq):
+        nonlocal img
+
+        try:
+            path = next(seq)
+        except StopIteration:
+            window.destroy()
+            return
+        # print(path)
+        try:
+            im = PIL.Image.open(path)
+            w, h = im.size
+            ratio = min(maxwidth/w, maxheight/h)
+            im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+            img = PIL.ImageTk.PhotoImage(image=im)
+            panel.configure(image=img)
+        except (tk.TclError, OSError, IOError) as e:  # May not be real image
+            print(e, file=stderr)
+            panel.after(0, show_images, panel, seq)
+            return
+        panel.after(IMAGE_TIME, show_images, panel, seq)
+
+    def get_paths(dirs):
+        used = []
+        for directory in dirs:
+            for path, dirs, files in os.walk(directory):
+                total = 0
+                for f in files:
+                    if f.endswith(".png") or f.endswith(".jpg") or f.endswith(".svg"):
+                        total += 1
+                        if not randrange(0, 1000):
+                            s = (path if path.endswith("/") else path + "/") + f
+                            yield s
+                if total:
+                    directory_locations.append([total, path])
+
+        directory_locations.sort(key=lambda pair: pair[0])
+        # print(directory_locations)
+        # print()
+        for i in range(1, len(directory_locations)):
+            directory_locations[i][0] += directory_locations[i-1][0]
+
+        # print()
+        # print(directory_locations)
+        # print(directory_locations[-1][0])
+        print("Finished counting number of media files:", directory_locations[-1][0])
+        nums = list(range(directory_locations[-1][0]))
+        shuffle(nums)
+        # print(nums)
+        # for x in [0, 1, 2 , 3, 4, 777, 762, 763, 764, 765, 5735]:
+        i = 0
+        j = BUFFER_LENGTH
+        length = len(nums)
+        while length > i:
+            # print(i, j)
+            d = OrderedDict()  # maps directories to indices of the directories
+            dd = OrderedDict()  # maps directories to indices of the whole structure
+            ez = nums[i:j]
+            # print("ez:", ez, len(nums))
+            # map_back = {}  # maps indices of the whole structure to directory and indices of the directories pairs
+            for x in ez:
+                # x = 1#directory_locations[-1][0]-1
+                # print("x:", x)
+                a = bisect_right(directory_locations, x)
+                # print(a)
+                # try:
+                # print(directory_locations[a], end=" ")
+                if a == 0:
+                    index = x
+                    # print(x)
+                else:
+                    index = x-directory_locations[a-1][0]
+                    # print(x-directory_locations[a-1][0])
+                directory = directory_locations[a][1]
+                if directory in d:
+                    d[directory].append(index)
+                    dd[directory].append(x)
+                else:
+                    d[directory] = [index]
+                    dd[directory] = [x]
+                # map_back[x] = (directory, index)
+
+
+            ll = []
+            dd_gen = iter(dd.items())
+            for k, v in d.items():  # directory, index
+                _, numss = next(dd_gen)
+                ll.extend(get_files(k, v, numss))
+            # print("ll:", ll)#[x[1] for x in ll])
+            ll.sort(key=lambda x:ez.index(x[1]))
+            yield from (x[2] + "/" + x[0] for x in ll)
+            # print("ll:", [x[1] for x in ll])
+
+            i = j
+            j += BUFFER_LENGTH
+
+    seq = get_paths(paths)
+    show_images(panel, seq)
+    window.mainloop()
+
+def is_image(s):
+    return s.endswith(".png") or s.endswith(".jpg") or s.endswith(".svg")
+
+def get_files(directory, indices, nums):
+    # print(indices, nums)
+    n = 0
+    # indices = [t[0] for t in v]
+    for f in os.scandir(directory):
+        # help(f)
+        if f.is_file and is_image(f.name):
+            if n in indices:
+                # print(n, indices.index(n), indices)
+                yield f.name, nums[indices.index(n)], directory
+                # indices.remove(n)
+                if not indices:
+                    return
+            n += 1
 
 if __name__ == "__main__":
-	main()
-	
-
+    parser = argparse.ArgumentParser(description="Screensaver program that works well with large quantity of media")
+    parser.add_argument("image_time", help="The time that an image will stay on screen for")
+    parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
+    args = parser.parse_args()
+    # print(args.paths)
+    #exit()
+    main(args.paths)
