@@ -4,14 +4,51 @@ import tkinter as tk
 import argparse
 from sys import stderr
 import os
-from random import shuffle, randrange
+from random import shuffle, randrange, randint
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 # import bisect
 
 PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-IMAGE_TIME = 50
-BUFFER_LENGTH = 10
+IMAGE_TIME = 100
+BUFFER_LENGTH = 30
+
+
+#def next_ten(seq):
+#	for i in range(10):
+#		yield next(seq)
+
+def random_directory_walk(dirs):
+	shuffle(dirs)
+	#iterators = [iter(d) for d in dirs]
+	while dirs:
+		directory = dirs.pop()
+		for f in os.scandir(directory):
+			if f.is_file():
+				if is_image(f.name):
+					yield directory + "/" + f.name
+			elif f.is_dir():
+				dirs.insert(randint(0, len(dirs)), directory + "/" + f.name)
+
+"""def random_os_walk(dirs):
+	if not dirs:
+		return
+	#print(dirs)
+	shuffle(dirs)
+	new_dirs = []
+	for directory in dirs:
+		for f in os.scandir(directory):
+#			print("f:", f.name, f.is_file, f.is_dir())
+			if f.is_file():
+				if is_image(f.name):
+					yield f.name
+			elif f.is_dir():  # is directory?
+				#print("dir:", f.name)
+				new_dirs.append(directory + "/" + f.name)
+	#print(new_dirs)
+	yield from random_os_walk(new_dirs)"""
+			
+			
 
 def bisect_right(a, x):
     """Return the index where to insert item x in list a, assuming a is sorted.
@@ -29,7 +66,8 @@ def bisect_right(a, x):
         mid = (lo+hi) // 2
         if x < a[mid][0]:
             hi = mid
-        else: lo = mid + 1
+        else:
+            lo = mid + 1
     return lo
 
 # def get_files(directory, indices, nums):
@@ -44,7 +82,7 @@ def bisect_right(a, x):
 #                     return
 #             n += 1
 
-
+counter = {}
 
 def main(paths):
     img = None
@@ -68,7 +106,7 @@ def main(paths):
         except StopIteration:
             window.destroy()
             return
-        # print(path)
+        print(path)
         try:
             im = PIL.Image.open(path)
             w, h = im.size
@@ -76,25 +114,23 @@ def main(paths):
             im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
             img = PIL.ImageTk.PhotoImage(image=im)
             panel.configure(image=img)
-        except (tk.TclError, OSError, IOError) as e:  # May not be real image
+        except (OSError, IOError) as e:  # May not be real image, or IO problem
             print(e, file=stderr)
             panel.after(0, show_images, panel, seq)
             return
         panel.after(IMAGE_TIME, show_images, panel, seq)
 
+    """
     def get_paths(dirs):
         used = []
-        for directory in dirs:
-            for path, dirs, files in os.walk(directory):
-                total = 0
-                for f in files:
-                    if f.endswith(".png") or f.endswith(".jpg") or f.endswith(".svg"):
-                        total += 1
-                        if not randrange(0, 1000):
-                            s = (path if path.endswith("/") else path + "/") + f
-                            yield s
-                if total:
-                    directory_locations.append([total, path])
+        total = 0
+        for f in random_directory_walk(dirs):
+            #if f.endswith(".png") or f.endswith(".jpg") or f.endswith(".svg"):
+            total += 1
+            if not randrange(0, 1000):
+                yield s
+        if total:
+            directory_locations.append([total, path])
 
         directory_locations.sort(key=lambda pair: pair[0])
         # print(directory_locations)
@@ -120,7 +156,7 @@ def main(paths):
             ez = nums[i:j]
             # print("ez:", ez, len(nums))
             # map_back = {}  # maps indices of the whole structure to directory and indices of the directories pairs
-            for x in ez:
+            for x in ez:'
                 # x = 1#directory_locations[-1][0]-1
                 # print("x:", x)
                 a = bisect_right(directory_locations, x)
@@ -155,8 +191,10 @@ def main(paths):
 
             i = j
             j += BUFFER_LENGTH
+        print(counter)
+    """
 
-    seq = get_paths(paths)
+    seq = random_directory_walk(paths)
     show_images(panel, seq)
     window.mainloop()
 
@@ -165,6 +203,10 @@ def is_image(s):
 
 def get_files(directory, indices, nums):
     # print(indices, nums)
+    if directory in counter:
+        counter[directory] += 1
+    else:
+        counter[directory] = 1
     n = 0
     # indices = [t[0] for t in v]
     for f in os.scandir(directory):
@@ -184,5 +226,10 @@ if __name__ == "__main__":
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
     # print(args.paths)
-    #exit()
+    #exit
+    #print(args.paths)
+    #for x in random_os_walk(args.paths[:]):
+    #	print(x)
+    #print(args.paths)
+    #print(list(list(os.walk(p)) for p in args.paths))
     main(args.paths)
