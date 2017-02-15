@@ -1,24 +1,30 @@
 from tkinter import Tk, Label
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 from sys import stderr
 from os import scandir
-from random import Random, shuffle, randrange
+from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 from itertools import chain
 
 
 PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-IMAGE_TIME = 400
 BUFFER_SIZE = 1000
 DISPLAY_CHANCE_INVERSE = 100
 PRECACHE_DIR = 100
 TOO_MANY_OPEN_FILES = 24
 TOO_MANY_SYMLINK_LEVELS = 40
 
-s = randrange(0, 2**63-1)
-r = Random(s)
-print(s)
+
+def positive_int(string):
+    message = "'{}' is not a positive non zero integer".format(string)
+    if not string.isdigit():
+        raise ArgumentTypeError(message)
+    x = int(string)
+    if x <= 0:
+        raise ArgumentTypeError(message)
+    return x
+
 
 def is_image(s):
     return s.endswith(".png") or s.endswith(".jpg") or s.endswith(".svg")
@@ -26,11 +32,11 @@ def is_image(s):
 
 def random_directory_walk(dirs):
     file_buffer = []
-    r.shuffle(dirs)
+    shuffle(dirs)
     iterators = [[d, None] for d in dirs]
 
     while iterators:
-        n = r.randrange(0, len(iterators))
+        n = randrange(0, len(iterators))
         directory, iterator = iterators[n]
         if not iterator:
             try:
@@ -50,11 +56,11 @@ def random_directory_walk(dirs):
                         break
                 iterators[n][1] = iterator
             except PermissionError as e:
-                print(e.__name__, e, file=stderr)
+                print("PermissionError", e, file=stderr)
                 del iterators[n]
                 continue
             except FileNotFoundError as e:
-                print(e.__name__, e, file=stderr)
+                print("FileNotFoundError", e, file=stderr)
                 continue
         try:
             f = next(iterator)
@@ -69,19 +75,19 @@ def random_directory_walk(dirs):
         else:
             if is_file:
                 if is_image(f.name):
-                    if not r.randrange(0, DISPLAY_CHANCE_INVERSE):
+                    if not randrange(0, DISPLAY_CHANCE_INVERSE):
                         yield f.path
                     elif len(file_buffer) == BUFFER_SIZE:
-                        yield file_buffer.pop(r.randrange(0, len(file_buffer)))
+                        yield file_buffer.pop(randrange(0, len(file_buffer)))
                     else:
                         file_buffer.append(f.path)
             elif f.is_dir():
                 iterators.append([f.path, None])
-    r.shuffle(file_buffer)
+    shuffle(file_buffer)
     yield from file_buffer
 
 
-def show_images(window, panel, seq, maxwidth, maxheight):
+def show_images(window, panel, seq, image_time, maxwidth, maxheight):
     global img  # prevents image being garbage collected
 
     try:
@@ -98,13 +104,13 @@ def show_images(window, panel, seq, maxwidth, maxheight):
             img = PIL.ImageTk.PhotoImage(image=im)
             panel.configure(image=img)
         except (OSError, IOError, FileNotFoundError) as e:  # May not be real image, IO problem. or file no longer there
-            print(e.__name__, e, file=stderr)
-            panel.after(0, show_images, window, panel, seq, maxwidth, maxheight)
+            print(type(e).__name__, e, file=stderr)
+            panel.after(0, show_images, window, panel, seq, image_time, maxwidth, maxheight)
         else:
-            panel.after(IMAGE_TIME, show_images, window, panel, seq, maxwidth, maxheight)
+            panel.after(image_time, show_images, window, panel, seq, image_time, maxwidth, maxheight)
 
 
-def main(paths):
+def main(paths, image_time):
     window = Tk()
     window.configure(background="black")
     window.bind("<Key>", lambda e: e.widget.quit())
@@ -116,18 +122,14 @@ def main(paths):
     panel.pack()
 
     seq = random_directory_walk(paths)
-    show_images(window, panel, seq, maxwidth, maxheight)
+    show_images(window, panel, seq, image_time, maxwidth, maxheight)
     window.mainloop()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Screensaver program that works well with large quantity of media")
-    parser.add_argument("-t", "--image_time", type=int, help="The time that each image will stay on screen for")
+    parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will stay on screen for")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
-    # summ = 0
-    # for path, dirs, files in os.walk(args.paths[0]):
-    #     summ += sum(1 for f in files if is_image(f))
-    # print(summ)
-    # print(sum(1 for f in random_directory_walk(args.paths)))
-    main(args.paths)
+
+    main(args.paths, args.image_time)
