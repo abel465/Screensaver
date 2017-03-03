@@ -67,22 +67,16 @@ def random_directory_walk(dirs):
         except StopIteration:
             del iterators[n]
             continue
-        try:
-            is_file = f.is_file()
-        except OSError as e:
-            if e.errno != TOO_MANY_SYMLINK_LEVELS:
-                raise e
-        else:
-            if is_file:
-                if is_image(f.name):
-                    if not randrange(0, DISPLAY_CHANCE_INVERSE):
-                        yield f.path
-                    elif len(file_buffer) == BUFFER_SIZE:
-                        yield file_buffer.pop(randrange(0, len(file_buffer)))
-                    else:
-                        file_buffer.append(f.path)
-            elif f.is_dir():
-                iterators.append([f.path, None])
+        if f.is_file(follow_symlinks=False):
+            if is_image(f.name):
+                if not randrange(0, DISPLAY_CHANCE_INVERSE):
+                    yield f.path
+                elif len(file_buffer) == BUFFER_SIZE:
+                    yield file_buffer.pop(randrange(0, len(file_buffer)))
+                else:
+                    file_buffer.append(f.path)
+        elif f.is_dir(follow_symlinks=False):
+            iterators.append([f.path, None])
     shuffle(file_buffer)
     yield from file_buffer
 
