@@ -8,7 +8,9 @@ from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 from itertools import chain
 import cv2
+import magic
 
+#  keys
 LEFT = 81
 RIGHT = 83
 DEFAULT = 255
@@ -45,8 +47,9 @@ def positive_int(string):
 
 
 def is_media(s):
-    extensions = (".png", ".jpg", ".svg", ".webm", ".mp4", ".mov", ".gif", ".wav", "m4v")
-    return any(s.endswith(e) for e in extensions)
+    return True
+    # extensions = (".png", ".jpg", ".svg", ".webm", ".mp4", ".mov", ".gif", "m4v")
+    # return s.endswith(extensions)
 
 class Screensaver(Tk):
     def __init__(self, paths, image_time):
@@ -57,8 +60,7 @@ class Screensaver(Tk):
         self.image_time = image_time
         self.configure(background="black")
         self.bind("<Key>", lambda e: e.widget.quit())
-        self.bind("<Left>", lambda e: self.decrement_index())
-        # self.bind("<Right>", lambda e: None)
+        self.bind("<Left>", lambda e: self.previous_image() or self.show_images())
         self.bind("<Right>", lambda e: self.after_cancel(self.callback) or self.show_images())
         self.attributes("-fullscreen", True)
 
@@ -68,46 +70,39 @@ class Screensaver(Tk):
         self.panel.pack()
 
         self.seq = self.random_directory_walk(paths)
-        try:
-            path = next(self.seq)
-        except StopIteration:
-            self.destroy()
-            return
-        self.callbacks = [self.get_callback(path)]
+
+        self.callbacks = []
+        self.add_callbacks(1)
         self.show_images()
 
-    def decrement_index(self):
-        # if self.index > 0:
+    def previous_image(self):
         self.index = max(0, self.index-2)
-        print(self.index)
         self.after_cancel(self.callback)
-        self.show_images()
 
     def play_video(self, path):
+        print(0, path)
         cap = cv2.VideoCapture(path)
         fps = int(cap.get(cv2.CAP_PROP_FPS))
-        ret = True
         cv2.namedWindow("frame", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        ret = True
         ret, frame = cap.read()
         while(ret and cap.isOpened()):
-            cv2.imshow('frame', frame)
+            cv2.imshow("frame", frame)
             ret, frame = cap.read()
             key = cv2.waitKey(fps)
             if key == RIGHT:
                 break
             elif key == LEFT:
-                cap.release()
-                cv2.destroyAllWindows()
-                self.decrement_index()
-                return
+                self.previous_image()
+                break
             elif key != DEFAULT:
                 cap.release()
                 cv2.destroyAllWindows()
                 exit()
-
         cap.release()
         cv2.destroyAllWindows()
+        self.attributes("-fullscreen", True)
         return self.after(0, self.show_images)
 
     def random_directory_walk(self, dirs):
@@ -161,7 +156,6 @@ class Screensaver(Tk):
         yield from file_buffer
 
     def display_image(self, image):
-        self.attributes("-fullscreen", True)
         self.panel.configure(image=image)
         return self.after(self.image_time, self.show_images)
 
@@ -173,21 +167,30 @@ class Screensaver(Tk):
             im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
             img = PIL.ImageTk.PhotoImage(image=im)
             self.bobs.append(img)
+            print(path)
             return Callback(self.display_image, img)
-        except (OSError, IOError, FileNotFoundError) as e:  # May not be real image, IO problem. or file no longer there
+        except (FileNotFoundError, IOError) as e:  # File no longer there, IO problem
+            print(type(e).__name__, e, file=stderr)
+        except OSError as e:  # May not be real image
             try:
-                return Callback(self.play_video, path)
-            except (OSError, IOError, FileNotFoundError) as e:
-                print(type(e).__name__, e, file=stderr)
+                if "video" in magic.from_file(path, True).lower():
+                    print(path)
+                    return Callback(self.play_video, path)
+            except (OSError, IOError, FileNotFoundError, magic.MagicException) as e2:
+                print(0, type(e).__name__, e, file=stderr)
+                print(1, type(e2).__name__, e, file=stderr)
 
-    def add_callbacks(self):
-        for i in range(2):
+    def add_callbacks(self, n):
+        count = 0
+        while count < n:
             try:
                 path = next(self.seq)
-                print(path)
             except StopIteration:
                 break
-            self.callbacks.append(self.get_callback(path))
+            callback = self.get_callback(path)
+            if callback:
+                self.callbacks.append(callback)
+                count += 1
 
     def show_images(self):
         try:
@@ -204,7 +207,7 @@ class Screensaver(Tk):
 
         self.callback = callback.run()
         if len(self.callbacks) < CALLBACK_BUFFER_SIZE:
-            self.add_callbacks()
+            self.add_callbacks(2)
 
 
 def main(paths, image_time):
