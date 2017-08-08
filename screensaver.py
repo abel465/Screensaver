@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from tkinter import Tk, Label
 from argparse import ArgumentParser, ArgumentTypeError
 from sys import stderr
@@ -5,7 +7,11 @@ from os import scandir
 from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 from itertools import chain
+import cv2
 
+LEFT = 81
+RIGHT = 83
+DEFAULT = 255
 
 PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -26,8 +32,32 @@ def positive_int(string):
     return x
 
 
-def is_image(s):
-    return s.endswith(".png") or s.endswith(".jpg") or s.endswith(".svg")
+def is_media(s):
+    extensions = (".png", ".jpg", ".svg", ".webm", ".mp4", ".mov", ".gif", ".wav", "m4v")
+    return any(s.endswith(e) for e in extensions)
+
+
+def play_video(path):
+    fps = 25
+    cap = cv2.VideoCapture(path)
+    ret = True
+    cv2.namedWindow("frame", cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty("frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    ret, frame = cap.read()
+    while(ret and cap.isOpened()):
+        cv2.imshow('frame', frame)
+        ret, frame = cap.read()
+        key = cv2.waitKey(fps)
+        if key == RIGHT:
+            break
+        elif key != DEFAULT:
+            cap.release()
+            cv2.destroyAllWindows()
+            exit()
+
+    cap.release()
+    cv2.destroyAllWindows()
+
 
 
 def random_directory_walk(dirs):
@@ -68,7 +98,7 @@ def random_directory_walk(dirs):
             del iterators[n]
             continue
         if f.is_file(follow_symlinks=False):
-            if is_image(f.name):
+            if is_media(f.name):
                 if not randrange(0, DISPLAY_CHANCE_INVERSE):
                     yield f.path
                 elif len(file_buffer) == BUFFER_SIZE:
@@ -98,16 +128,23 @@ def show_images(window, panel, seq, image_time, maxwidth, maxheight):
             img = PIL.ImageTk.PhotoImage(image=im)
             panel.configure(image=img)
         except (OSError, IOError, FileNotFoundError) as e:  # May not be real image, IO problem. or file no longer there
-            print(type(e).__name__, e, file=stderr)
-            panel.after(0, show_images, window, panel, seq, image_time, maxwidth, maxheight)
-        else:
-            panel.after(image_time, show_images, window, panel, seq, image_time, maxwidth, maxheight)
+            try:
+                play_video(path)
+                window.attributes("-fullscreen", True)
+            except (OSError, IOError, FileNotFoundError) as e:
+                print(type(e).__name__, e, file=stderr)
+                panel.after(0, show_images, window, panel, seq, image_time, maxwidth, maxheight)
+                return
+
+        panel.after(image_time, show_images, window, panel, seq, image_time, maxwidth, maxheight)
 
 
 def main(paths, image_time):
     window = Tk()
     window.configure(background="black")
     window.bind("<Key>", lambda e: e.widget.quit())
+    window.bind("<Right>", lambda e: None)
+    window.bind("<Left>", lambda e: None)
     window.attributes("-fullscreen", True)
 
     maxwidth, maxheight = window.winfo_screenwidth(), window.winfo_screenheight()
@@ -125,5 +162,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will stay on screen for")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
+
+    args.image_time = args.image_time or 500
 
     main(args.paths, args.image_time)
