@@ -23,6 +23,7 @@ PRECACHE_DIR = 100
 TOO_MANY_OPEN_FILES = 24
 TOO_MANY_SYMLINK_LEVELS = 40
 CALLBACK_BUFFER_SIZE = 10
+HISTORY_LENGTH = 50
 
 DEFAULT_TIME = 1000
 
@@ -46,32 +47,24 @@ def positive_int(string):
     return x
 
 
-def is_media(s):
-    return True
-    # extensions = (".png", ".jpg", ".svg", ".webm", ".mp4", ".mov", ".gif", "m4v")
-    # return s.endswith(extensions)
-
 class Screensaver(Tk):
     def __init__(self, paths, image_time):
         super().__init__()
+        self.callbacks = []
         self.history = []
         self.index = 0
-        self.bobs = []
         self.image_time = image_time
         self.configure(background="black")
+        self.maxwidth, self.maxheight = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.seq = self.random_directory_walk(paths)
+
         self.bind("<Key>", lambda e: e.widget.quit())
         self.bind("<Left>", lambda e: self.previous_image() or self.show_images())
         self.bind("<Right>", lambda e: self.after_cancel(self.callback) or self.show_images())
         self.attributes("-fullscreen", True)
-
-        self.maxwidth, self.maxheight = self.winfo_screenwidth(), self.winfo_screenheight()
-
         self.panel = Label(self)
         self.panel.pack()
 
-        self.seq = self.random_directory_walk(paths)
-
-        self.callbacks = []
         self.add_callbacks(1)
         self.show_images()
 
@@ -80,8 +73,10 @@ class Screensaver(Tk):
         self.after_cancel(self.callback)
 
     def play_video(self, path):
-        print(0, path)
-        cap = cv2.VideoCapture(path)
+        try:
+            cap = cv2.VideoCapture(path)
+        except FileNotFoundError:
+            return self.after(0, self.show_images)
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         cv2.namedWindow("frame", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -123,7 +118,7 @@ class Screensaver(Tk):
                                 for i in range(len(iterators)):
                                     if iterators[i][1]:
                                         #  evaluating next PRECACHE_DIR images to close files
-                                        evaluation = tuple(next(iterators[i][1]) for _ in range(PRECACHE_DIR))  # STOPITERATION WARNING
+                                        evaluation = tuple(next(iterators[i][1]) for _ in range(PRECACHE_DIR))
                                         iterators[i][1] = chain(evaluation, iterators[i][1])
                             else:
                                 raise e
@@ -143,13 +138,12 @@ class Screensaver(Tk):
                 del iterators[n]
                 continue
             if f.is_file(follow_symlinks=False):
-                if is_media(f.name):
-                    if not randrange(0, DISPLAY_CHANCE_INVERSE):
-                        yield f.path
-                    elif len(file_buffer) == BUFFER_SIZE:
-                        yield file_buffer.pop(randrange(0, len(file_buffer)))
-                    else:
-                        file_buffer.append(f.path)
+                if not randrange(0, DISPLAY_CHANCE_INVERSE):
+                    yield f.path
+                elif len(file_buffer) == BUFFER_SIZE:
+                    yield file_buffer.pop(randrange(0, len(file_buffer)))
+                else:
+                    file_buffer.append(f.path)
             elif f.is_dir(follow_symlinks=False):
                 iterators.append([f.path, None])
         shuffle(file_buffer)
@@ -159,26 +153,43 @@ class Screensaver(Tk):
         self.panel.configure(image=image)
         return self.after(self.image_time, self.show_images)
 
+    def display_animated_gif(self, frames, delay, i=0):
+        self.panel.configure(image=frames[i])
+        if i < len(frames)-1:
+            self.callback = self.after(delay, self.display_animated_gif, frames, delay, i+1)
+        else:
+            self.callback = self.after(0, self.show_images)
+        return self.callback
+
     def get_callback(self, path):
-        try:
-            im = PIL.Image.open(path)
-            w, h = im.size
-            ratio = min(self.maxwidth/w, self.maxheight/h)
-            im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
-            img = PIL.ImageTk.PhotoImage(image=im)
-            self.bobs.append(img)
+        file_info = magic.from_file(path, True).lower()
+        if "video" in file_info:
             print(path)
-            return Callback(self.display_image, img)
-        except (FileNotFoundError, IOError) as e:  # File no longer there, IO problem
-            print(type(e).__name__, e, file=stderr)
-        except OSError as e:  # May not be real image
-            try:
-                if "video" in magic.from_file(path, True).lower():
+            return Callback(self.play_video, path)
+        elif "image" in file_info:
+            if "gif" in file_info:
+                i = 0
+                frames = []
+                im = PIL.Image.open(path)
+                delay = im.info['duration']
+                try:
+                    while True:
+                        frames.append(PIL.ImageTk.PhotoImage(image=im))
+                        i += 1
+                        im.seek(i)
+                except EOFError:
+                    return Callback(self.display_animated_gif, frames, delay)
+            else:
+                try:
+                    im = PIL.Image.open(path)
+                    w, h = im.size
+                    ratio = min(self.maxwidth/w, self.maxheight/h)
+                    im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+                    img = PIL.ImageTk.PhotoImage(image=im)
                     print(path)
-                    return Callback(self.play_video, path)
-            except (OSError, IOError, FileNotFoundError, magic.MagicException) as e2:
-                print(0, type(e).__name__, e, file=stderr)
-                print(1, type(e2).__name__, e, file=stderr)
+                    return Callback(self.display_image, img)
+                except (OSError, FileNotFoundError, IOError) as e:  # May not be real image, File no longer there, IO problem
+                    print(type(e).__name__, e, file=stderr)
 
     def add_callbacks(self, n):
         count = 0
@@ -199,9 +210,10 @@ class Screensaver(Tk):
             else:
                 callback = self.callbacks.pop(0)
                 self.history.append(callback)
+                if len(self.history) > HISTORY_LENGTH:
+                    del self.history[0]
             self.index += 1
-        except IndexError:
-            print("INDEX ERROR")
+        except IndexError:  # Finished
             self.destroy()
             return
 
