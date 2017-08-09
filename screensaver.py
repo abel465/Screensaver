@@ -10,7 +10,7 @@ from itertools import chain
 import cv2
 import magic
 
-#  keys
+#  Keys
 LEFT = 81
 RIGHT = 83
 DEFAULT = 255
