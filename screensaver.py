@@ -27,6 +27,7 @@ HISTORY_LENGTH = 50
 
 DEFAULT_TIME = 1000
 
+
 class Callback(object):
     def __init__(self, func, *args, **kwargs):
         self.func = func
@@ -62,8 +63,8 @@ class Screensaver(Tk):
         self.bind("<Left>", lambda e: self.previous_image() or self.show_images())
         self.bind("<Right>", lambda e: self.after_cancel(self.callback) or self.show_images())
         self.attributes("-fullscreen", True)
-        self.panel = Label(self)
-        self.panel.pack()
+        self.panel = Label(self, border=0)
+        self.panel.pack(expand=True)
 
         self.add_callbacks(1)
         self.show_images()
@@ -154,33 +155,45 @@ class Screensaver(Tk):
         return self.after(self.image_time, self.show_images)
 
     def display_animated_gif(self, frames, delay, i=0):
-        self.panel.configure(image=frames[i])
         if i < len(frames)-1:
             self.callback = self.after(delay, self.display_animated_gif, frames, delay, i+1)
         else:
             self.callback = self.after(0, self.show_images)
+        self.panel.configure(image=frames[i])
         return self.callback
 
     def get_callback(self, path):
-        file_info = magic.from_file(path, True).lower()
+        try:
+            file_info = magic.from_file(path, True).lower()
+        except (PermissionError, magic.MagicException) as e:
+            print(type(e).__name__, e, file=stderr)
+            return
         if "video" in file_info:
             print(path)
             return Callback(self.play_video, path)
         elif "image" in file_info:
-            if "gif" in file_info:
-                i = 0
-                frames = []
-                im = PIL.Image.open(path)
-                delay = im.info['duration']
-                try:
-                    while True:
-                        frames.append(PIL.ImageTk.PhotoImage(image=im))
-                        i += 1
-                        im.seek(i)
-                except EOFError:
-                    return Callback(self.display_animated_gif, frames, delay)
-            else:
-                try:
+            try:
+                if "gif" in file_info:
+                    i = 0
+                    frames = []
+                    im = PIL.Image.open(path)
+                    delay = im.info["duration"]
+                    w, h = im.size
+                    ratio = min(self.maxwidth/w, self.maxheight/h)
+                    im_resized = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+                    try:
+                        while True:
+                            frames.append(PIL.ImageTk.PhotoImage(image=im_resized))
+                            i += 1
+                            im.seek(i)
+                            im_resized = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+                    except EOFError:
+                        print(path)
+                        if len(frames) == 1:
+                            return Callback(self.display_image, frames[0])
+                        else:
+                            return Callback(self.display_animated_gif, frames, delay)
+                else:
                     im = PIL.Image.open(path)
                     w, h = im.size
                     ratio = min(self.maxwidth/w, self.maxheight/h)
@@ -188,8 +201,8 @@ class Screensaver(Tk):
                     img = PIL.ImageTk.PhotoImage(image=im)
                     print(path)
                     return Callback(self.display_image, img)
-                except (OSError, FileNotFoundError, IOError) as e:  # May not be real image, File no longer there, IO problem
-                    print(type(e).__name__, e, file=stderr)
+            except (OSError, FileNotFoundError, IOError) as e:  # May not be real image, File no longer there, IO problem
+                print(type(e).__name__, e, file=stderr)
 
     def add_callbacks(self, n):
         count = 0
