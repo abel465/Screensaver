@@ -4,6 +4,6 @@ Screensaver program that deals well when loading many files (doesn't lag out or 
 ## Dependencies
 
 - python-magic
-- opencv2
+- vlc
 - tkinter
 - PIL

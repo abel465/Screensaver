@@ -2,13 +2,13 @@
 
 from tkinter import Tk, Label
 from argparse import ArgumentParser, ArgumentTypeError
-from sys import stderr
+from sys import stderr, platform
 from os import scandir
 from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 from itertools import chain
-import cv2
 import magic
+import vlc
 
 #  Keys
 LEFT = 81
@@ -27,6 +27,8 @@ HISTORY_LENGTH = 50
 
 DEFAULT_TIME = 1000
 
+_isWindows = platform.startswith('win')
+
 
 class Callback(object):
     def __init__(self, func, *args, **kwargs):
@@ -39,7 +41,7 @@ class Callback(object):
 
 
 def positive_int(string):
-    message = "'{}' is not a positive non zero integer".format(string)
+    message = f"'{string}' is not a positive non zero integer"
     if not string.isdigit():
         raise ArgumentTypeError(message)
     x = int(string)
@@ -56,50 +58,47 @@ class Screensaver(Tk):
         self.index = 0
         self.image_time = image_time
         self.configure(background="black")
-        self.maxwidth, self.maxheight = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.seq = self.random_directory_walk(paths)
+        self.width, self.height = self.winfo_screenwidth(), self.winfo_screenheight()
+        self.path_seq = self.random_directory_walk(paths)
 
         self.bind("<Key>", lambda e: e.widget.quit())
-        self.bind("<Left>", lambda e: self.previous_image() or self.show_images())
-        self.bind("<Right>", lambda e: self.after_cancel(self.callback) or self.show_images())
+        self.bind("<Left>", lambda e: self.previous_media())
+        self.bind("<Right>", lambda e: self.next_media())
         self.attributes("-fullscreen", True)
-        self.panel = Label(self, border=0)
+        self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
-
+        self.video_player = vlc.MediaPlayer()
+        self.video_player.set_fullscreen(True)
+        if _isWindows:
+            self.video_player.set_hwnd(self.panel.winfo_id())
+        else:
+            self.video_player.set_xwindow(self.panel.winfo_id())
         self.add_callbacks(1)
-        self.show_images()
+        self.display_media()
 
-    def previous_image(self):
+    def next_media(self):
+        self.after_cancel(self.callback)
+        self.video_player.stop()
+        self.display_media()
+
+    def previous_media(self):
         self.index = max(0, self.index-2)
         self.after_cancel(self.callback)
+        self.video_player.stop()
+        self.display_media()
 
     def play_video(self, path):
-        try:
-            cap = cv2.VideoCapture(path)
-        except FileNotFoundError:
-            return self.after(0, self.show_images)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        cv2.namedWindow("frame", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("frame", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        ret = True
-        ret, frame = cap.read()
-        while(ret and cap.isOpened()):
-            cv2.imshow("frame", frame)
-            ret, frame = cap.read()
-            key = cv2.waitKey(fps)
-            if key == RIGHT:
-                break
-            elif key == LEFT:
-                self.previous_image()
-                break
-            elif key != DEFAULT:
-                cap.release()
-                cv2.destroyAllWindows()
-                exit()
-        cap.release()
-        cv2.destroyAllWindows()
-        self.attributes("-fullscreen", True)
-        return self.after(0, self.show_images)
+        media = vlc.Media(path)
+        self.video_player.set_media(media)
+        self.video_player.play()
+        return self.monitor_video()
+
+    def monitor_video(self):
+        if self.video_player.get_state() != vlc.State.Ended:
+            self.callback = self.after(42, self.monitor_video)
+            return self.callback
+        self.video_player.stop()
+        self.display_media()
 
     def random_directory_walk(self, dirs):
         file_buffer = []
@@ -152,13 +151,13 @@ class Screensaver(Tk):
 
     def display_image(self, image):
         self.panel.configure(image=image)
-        return self.after(self.image_time, self.show_images)
+        return self.after(self.image_time, self.display_media)
 
     def display_animated_gif(self, frames, delay, i=0):
         if i < len(frames)-1:
             self.callback = self.after(delay, self.display_animated_gif, frames, delay, i+1)
         else:
-            self.callback = self.after(0, self.show_images)
+            self.callback = self.after(0, self.display_media)
         self.panel.configure(image=frames[i])
         return self.callback
 
@@ -179,7 +178,7 @@ class Screensaver(Tk):
                     im = PIL.Image.open(path)
                     delay = im.info["duration"]
                     w, h = im.size
-                    ratio = min(self.maxwidth/w, self.maxheight/h)
+                    ratio = min(self.width/w, self.height/h)
                     im_resized = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
                     try:
                         while True:
@@ -196,7 +195,7 @@ class Screensaver(Tk):
                 else:
                     im = PIL.Image.open(path)
                     w, h = im.size
-                    ratio = min(self.maxwidth/w, self.maxheight/h)
+                    ratio = min(self.width/w, self.height/h)
                     im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
                     img = PIL.ImageTk.PhotoImage(image=im)
                     print(path)
@@ -208,7 +207,7 @@ class Screensaver(Tk):
         count = 0
         while count < n:
             try:
-                path = next(self.seq)
+                path = next(self.path_seq)
             except StopIteration:
                 break
             callback = self.get_callback(path)
@@ -216,7 +215,7 @@ class Screensaver(Tk):
                 self.callbacks.append(callback)
                 count += 1
 
-    def show_images(self):
+    def display_media(self):
         try:
             if self.index < len(self.history):
                 callback = self.history[self.index]
