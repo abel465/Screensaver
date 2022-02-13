@@ -51,12 +51,14 @@ def positive_int(string):
 
 
 class Screensaver(Tk):
-    def __init__(self, paths, image_time):
+    def __init__(self, paths, image_time, no_video, no_gif):
         super().__init__()
         self.callbacks = []
         self.history = []
         self.index = 0
         self.image_time = image_time
+        self.no_video = no_video
+        self.no_gif = no_gif
         self.configure(background="black")
         self.width, self.height = self.winfo_screenwidth(), self.winfo_screenheight()
         self.path_seq = self.random_directory_walk(paths)
@@ -67,24 +69,27 @@ class Screensaver(Tk):
         self.attributes("-fullscreen", True)
         self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
-        self.video_player = vlc.MediaPlayer()
-        self.video_player.set_fullscreen(True)
-        if _isWindows:
-            self.video_player.set_hwnd(self.panel.winfo_id())
-        else:
-            self.video_player.set_xwindow(self.panel.winfo_id())
+        if not self.no_video:
+            self.video_player = vlc.MediaPlayer()
+            self.video_player.set_fullscreen(True)
+            if _isWindows:
+                self.video_player.set_hwnd(self.panel.winfo_id())
+            else:
+                self.video_player.set_xwindow(self.panel.winfo_id())
         self.add_callbacks(1)
         self.display_media()
 
     def next_media(self):
         self.after_cancel(self.callback)
-        self.video_player.stop()
+        if not self.no_video:
+            self.video_player.stop()
         self.display_media()
 
     def previous_media(self):
         self.index = max(0, self.index-2)
         self.after_cancel(self.callback)
-        self.video_player.stop()
+        if not self.no_video:
+            self.video_player.stop()
         self.display_media()
 
     def play_video(self, path):
@@ -163,16 +168,20 @@ class Screensaver(Tk):
 
     def get_callback(self, path):
         try:
-            file_info = magic.from_file(path, True).lower()
+            mime_type = magic.from_file(path, True).lower()
         except (PermissionError, magic.MagicException) as e:
             print(type(e).__name__, e, file=stderr)
             return
-        if "video" in file_info:
+        if mime_type.startswith("video/"):
+            if self.no_video:
+                return
             print(path)
             return Callback(self.play_video, path)
-        elif "image" in file_info:
+        elif mime_type.startswith("image/"):
             try:
-                if "gif" in file_info:
+                if mime_type == "image/gif":
+                    if self.no_gif:
+                        return
                     i = 0
                     frames = []
                     im = PIL.Image.open(path)
@@ -236,15 +245,17 @@ class Screensaver(Tk):
             self.add_callbacks(2)
 
 
-def main(paths, image_time):
-    screensaver = Screensaver(paths, image_time)
+def main(paths, image_time, no_video, no_gif):
+    screensaver = Screensaver(paths, image_time, no_video, no_gif)
     screensaver.mainloop()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Screensaver program that works well with large quantity of media")
     parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will stay on screen for")
+    parser.add_argument("--no-video", help="Skip over videos", action="store_true")
+    parser.add_argument("--no-gif", help="Skip over gifs", action="store_true")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
 
-    main(args.paths, args.image_time or DEFAULT_TIME)
+    main(args.paths, args.image_time or DEFAULT_TIME, args.no_video, args.no_gif)
