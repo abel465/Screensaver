@@ -219,12 +219,14 @@ class Screensaver(Tk):
         try:
             if self.index < len(self.history):
                 callback = self.history[self.index]
+                self.index += 1
             else:
                 callback = self.callbacks.pop(0)
                 self.history.append(callback)
                 if len(self.history) > HISTORY_LENGTH:
                     del self.history[0]
-            self.index += 1
+                else:
+                    self.index += 1
         except IndexError:  # Finished
             self.destroy()
             return
