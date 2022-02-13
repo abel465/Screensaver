@@ -3,12 +3,12 @@
 from tkinter import Tk, Label
 from argparse import ArgumentParser, ArgumentTypeError
 from sys import stderr, platform
-from os import scandir
 from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
-from itertools import chain
+import itertools
 import magic
 import vlc
+import os
 
 #  Keys
 LEFT = 81
@@ -117,14 +117,14 @@ class Screensaver(Tk):
                 try:
                     while True:
                         try:
-                            iterator = scandir(directory)
+                            iterator = os.scandir(directory)
                         except OSError as e:
                             if e.errno == TOO_MANY_OPEN_FILES:
                                 for i in range(len(iterators)):
                                     if iterators[i][1]:
                                         #  evaluating next PRECACHE_DIR images to close files
                                         evaluation = tuple(next(iterators[i][1]) for _ in range(PRECACHE_DIR))
-                                        iterators[i][1] = chain(evaluation, iterators[i][1])
+                                        iterators[i][1] = itertools.chain(evaluation, iterators[i][1])
                             else:
                                 raise e
                         else:
@@ -179,22 +179,19 @@ class Screensaver(Tk):
             return Callback(self.play_video, path)
         elif mime_type.startswith("image/"):
             try:
+                img = PIL.Image.open(path)
+                w, h = img.size
+                ratio = min(self.width/w, self.height/h)
+                size = (int(ratio*w), int(ratio*h))
                 if mime_type == "image/gif":
                     if self.no_gif:
                         return
-                    i = 0
                     frames = []
-                    im = PIL.Image.open(path)
-                    delay = im.info["duration"]
-                    w, h = im.size
-                    ratio = min(self.width/w, self.height/h)
-                    im_resized = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+                    delay = img.info["duration"]
                     try:
-                        while True:
-                            frames.append(PIL.ImageTk.PhotoImage(image=im_resized))
-                            i += 1
-                            im.seek(i)
-                            im_resized = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
+                        for i in itertools.count(1):
+                            frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS)))
+                            img.seek(i)
                     except EOFError:
                         print(path)
                         if len(frames) == 1:
@@ -202,27 +199,20 @@ class Screensaver(Tk):
                         else:
                             return Callback(self.display_animated_gif, frames, delay)
                 else:
-                    im = PIL.Image.open(path)
-                    w, h = im.size
-                    ratio = min(self.width/w, self.height/h)
-                    im = im.resize((int(ratio*w), int(ratio*h)), PIL.Image.ANTIALIAS)
-                    img = PIL.ImageTk.PhotoImage(image=im)
+                    img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS))
                     print(path)
                     return Callback(self.display_image, img)
             except (OSError, FileNotFoundError, IOError) as e:  # May not be real image, File no longer there, IO problem
                 print(type(e).__name__, e, file=stderr)
 
     def add_callbacks(self, n):
-        count = 0
-        while count < n:
-            try:
-                path = next(self.path_seq)
-            except StopIteration:
-                break
+        for path in self.path_seq:
             callback = self.get_callback(path)
             if callback:
                 self.callbacks.append(callback)
-                count += 1
+                n -= 1
+                if n == 0:
+                    break
 
     def display_media(self):
         try:
