@@ -7,6 +7,7 @@ from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
 import itertools
 import magic
+import time
 import vlc
 import os
 
@@ -158,12 +159,18 @@ class Screensaver(Tk):
         self.panel.configure(image=image)
         return self.after(self.image_time, self.display_media)
 
-    def display_animated_gif(self, frames, delay, i=0):
-        if i < len(frames)-1:
-            self.callback = self.after(delay, self.display_animated_gif, frames, delay, i+1)
-        else:
-            self.callback = self.after(0, self.display_media)
+    def display_animated_gif(self, frames, delays):
+        return self._display_animated_gif(frames, delays, time.perf_counter_ns(), 0)
+
+    def _display_animated_gif(self, frames, delays, begin_time, i):
+        if i == len(frames):
+            if (time.perf_counter_ns() - begin_time) // 1000000 >= self.image_time:
+                self.display_media()
+                return
+            else:
+                i = 0
         self.panel.configure(image=frames[i])
+        self.callback = self.after(delays[i], self._display_animated_gif, frames, delays, begin_time, i+1)
         return self.callback
 
     def get_callback(self, path):
@@ -187,17 +194,18 @@ class Screensaver(Tk):
                     if self.no_gif:
                         return
                     frames = []
-                    delay = img.info["duration"]
+                    delays = []
                     try:
                         for i in itertools.count(1):
                             frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS)))
+                            delays.append(img.info["duration"])
                             img.seek(i)
                     except EOFError:
                         print(path)
                         if len(frames) == 1:
                             return Callback(self.display_image, frames[0])
                         else:
-                            return Callback(self.display_animated_gif, frames, delay)
+                            return Callback(self.display_animated_gif, frames, delays)
                 else:
                     img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS))
                     print(path)
