@@ -249,8 +249,8 @@ def main(paths, image_time, no_video, no_gif):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Screensaver program that works well with large quantity of media")
-    parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will stay on screen for")
+    parser = ArgumentParser(description="Screensaver program that supports video (with audio) and animated gifs")
+    parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will persist")
     parser.add_argument("--no-video", help="Skip over videos", action="store_true")
     parser.add_argument("--no-gif", help="Skip over gifs", action="store_true")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
