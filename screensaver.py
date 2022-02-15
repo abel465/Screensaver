@@ -2,43 +2,23 @@
 
 from tkinter import Tk, Label
 from argparse import ArgumentParser, ArgumentTypeError
-from sys import stderr, platform
-from random import shuffle, randrange
 import PIL.ImageTk, PIL.ImageFile, PIL.Image
+from functools import partial
+import mimetypes
 import itertools
-import magic
+import bisect
+import random
 import time
+import sys
 import vlc
 import os
 
-#  Keys
-LEFT = 81
-RIGHT = 83
-DEFAULT = 255
-
 PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-BUFFER_SIZE = 1000
-DISPLAY_CHANCE_INVERSE = 100
-PRECACHE_DIR = 100
-TOO_MANY_OPEN_FILES = 24
-TOO_MANY_SYMLINK_LEVELS = 40
-CALLBACK_BUFFER_SIZE = 10
 HISTORY_LENGTH = 50
+DEFAULT_TIME = 2000
 
-DEFAULT_TIME = 1000
-
-_isWindows = platform.startswith('win')
-
-
-class Callback(object):
-    def __init__(self, func, *args, **kwargs):
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-
-    def run(self):
-        return self.func(*self.args, **self.kwargs)
+_isWindows = sys.platform.startswith('win')
 
 
 def positive_int(string):
@@ -51,25 +31,62 @@ def positive_int(string):
     return x
 
 
+def fs_walk(path):
+    def onerror(e):
+        raise e
+    for root, dirs, files in os.walk(path, onerror=onerror):
+        yield root, dirs, map(partial(os.path.join, root), files)
+
+
+class MediaPathProvider:
+    def __init__(self, is_valid_media):
+        self.keys = []
+        self.values = []
+        self.indices = []
+        self.count = 0
+        self.is_valid_media = is_valid_media
+
+    def add(self, count, value):
+        self.keys.append(self.count)
+        self.values.append(value)
+        self.indices.extend(range(self.count, self.count + count))
+        self.count += count
+
+    def get_next_path(self):
+        def get_random():
+            i = random.randrange(self.count)
+            self.count -= 1
+            self.indices[i], self.indices[-1] = self.indices[-1], self.indices[i]
+            n = self.indices.pop() + 1
+            key = bisect.bisect(self.keys, n) - 1
+            return n - self.keys[key], self.values[key]
+        if self.count:
+            target, dir = get_random()
+            root, _, files = next(fs_walk(dir))
+            count = 0
+            for path in files:
+                count += self.is_valid_media(path)
+                if count == target:
+                    return path
+
+
 class Screensaver(Tk):
     def __init__(self, paths, image_time, no_video, no_gif):
         super().__init__()
-        self.callbacks = []
         self.history = []
         self.index = 0
         self.image_time = image_time
         self.no_video = no_video
         self.no_gif = no_gif
-        self.configure(background="black")
         self.width, self.height = self.winfo_screenwidth(), self.winfo_screenheight()
-        self.path_seq = self.random_directory_walk(paths)
-
         self.bind("<Key>", lambda e: e.widget.quit())
         self.bind("<Left>", lambda e: self.previous_media())
         self.bind("<Right>", lambda e: self.next_media())
         self.attributes("-fullscreen", True)
+        self.configure(background="black")
         self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
+        self.create_media_path_provider(paths)
         if not self.no_video:
             self.video_player = vlc.MediaPlayer()
             self.video_player.set_fullscreen(True)
@@ -77,18 +94,17 @@ class Screensaver(Tk):
                 self.video_player.set_hwnd(self.panel.winfo_id())
             else:
                 self.video_player.set_xwindow(self.panel.winfo_id())
-        self.add_callbacks(1)
         self.display_media()
 
     def next_media(self):
-        self.after_cancel(self.callback)
+        self.after_cancel(self.schedule_id)
         if not self.no_video:
             self.video_player.stop()
         self.display_media()
 
     def previous_media(self):
-        self.index = max(0, self.index-2)
-        self.after_cancel(self.callback)
+        self.index = max(0, self.index - 2)
+        self.after_cancel(self.schedule_id)
         if not self.no_video:
             self.video_player.stop()
         self.display_media()
@@ -101,59 +117,39 @@ class Screensaver(Tk):
 
     def monitor_video(self):
         if self.video_player.get_state() != vlc.State.Ended:
-            self.callback = self.after(42, self.monitor_video)
-            return self.callback
+            self.schedule_id = self.after(42, self.monitor_video)
+            return self.schedule_id
         self.video_player.stop()
         self.display_media()
 
-    def random_directory_walk(self, dirs):
-        file_buffer = []
-        shuffle(dirs)
-        iterators = [[d, None] for d in dirs]
+    def is_valid_media(self, path):
+        match mimetypes.guess_type(path)[0]:
+            case None:
+                return False
+            case "image/gif":
+                return not self.no_gif
+            case image if image.startswith("image/"):
+                return True
+            case video if video.startswith("video/"):
+                return not self.no_video
+            case _:
+                return False
 
-        while iterators:
-            n = randrange(0, len(iterators))
-            directory, iterator = iterators[n]
-            if not iterator:
-                try:
-                    while True:
-                        try:
-                            iterator = os.scandir(directory)
-                        except OSError as e:
-                            if e.errno == TOO_MANY_OPEN_FILES:
-                                for i in range(len(iterators)):
-                                    if iterators[i][1]:
-                                        #  evaluating next PRECACHE_DIR images to close files
-                                        evaluation = tuple(next(iterators[i][1]) for _ in range(PRECACHE_DIR))
-                                        iterators[i][1] = itertools.chain(evaluation, iterators[i][1])
-                            else:
-                                raise e
-                        else:
-                            break
-                    iterators[n][1] = iterator
-                except PermissionError as e:
-                    print("PermissionError", e, file=stderr)
-                    del iterators[n]
-                    continue
-                except FileNotFoundError as e:
-                    print("FileNotFoundError", e, file=stderr)
-                    continue
+    def create_media_path_provider(self, paths):
+        def _create_media_path_provider(it):
             try:
-                f = next(iterator)
+                root, _, files = next(it)
             except StopIteration:
-                del iterators[n]
-                continue
-            if f.is_file(follow_symlinks=False):
-                if not randrange(0, DISPLAY_CHANCE_INVERSE):
-                    yield f.path
-                elif len(file_buffer) == BUFFER_SIZE:
-                    yield file_buffer.pop(randrange(0, len(file_buffer)))
-                else:
-                    file_buffer.append(f.path)
-            elif f.is_dir(follow_symlinks=False):
-                iterators.append([f.path, None])
-        shuffle(file_buffer)
-        yield from file_buffer
+                return
+            count = sum(map(self.is_valid_media, files))
+            if count:
+                self.media_path_provider.add(count, root)
+                self.after(42, _create_media_path_provider, it)
+            else:
+                _create_media_path_provider(it)
+        it = itertools.chain.from_iterable(map(fs_walk, paths))
+        self.media_path_provider = MediaPathProvider(self.is_valid_media)
+        _create_media_path_provider(it)
 
     def display_image(self, image):
         self.panel.configure(image=image)
@@ -164,83 +160,66 @@ class Screensaver(Tk):
 
     def _display_animated_gif(self, frames, delays, begin_time, i):
         if i == len(frames):
-            if (time.perf_counter_ns() - begin_time) // 1000000 >= self.image_time:
+            if (time.perf_counter_ns() - begin_time) // 1_000_000 >= self.image_time:
                 self.display_media()
                 return
             else:
                 i = 0
         self.panel.configure(image=frames[i])
-        self.callback = self.after(delays[i], self._display_animated_gif, frames, delays, begin_time, i+1)
-        return self.callback
+        self.schedule_id = self.after(delays[i], self._display_animated_gif, frames, delays, begin_time, i+1)
+        return self.schedule_id
 
-    def get_callback(self, path):
+    def create_image_callable(self, path):
+        img = PIL.Image.open(path)
+        w, h = img.size
+        ratio = min(self.width/w, self.height/h)
+        size = (int(ratio*w), int(ratio*h))
+        img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS))
+        return partial(self.display_image, img)
+
+    def create_gif_callable(self, path):
+        img = PIL.Image.open(path)
+        w, h = img.size
+        ratio = min(self.width/w, self.height/h)
+        size = (int(ratio*w), int(ratio*h))
+        frames = []
+        delays = []
         try:
-            mime_type = magic.from_file(path, True).lower()
-        except (PermissionError, magic.MagicException) as e:
-            print(type(e).__name__, e, file=stderr)
-            return
-        if mime_type.startswith("video/"):
-            if self.no_video:
-                return
-            print(path)
-            return Callback(self.play_video, path)
-        elif mime_type.startswith("image/"):
-            try:
-                img = PIL.Image.open(path)
-                w, h = img.size
-                ratio = min(self.width/w, self.height/h)
-                size = (int(ratio*w), int(ratio*h))
-                if mime_type == "image/gif":
-                    if self.no_gif:
-                        return
-                    frames = []
-                    delays = []
-                    try:
-                        for i in itertools.count(1):
-                            frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS)))
-                            delays.append(img.info["duration"])
-                            img.seek(i)
-                    except EOFError:
-                        print(path)
-                        if len(frames) == 1:
-                            return Callback(self.display_image, frames[0])
-                        else:
-                            return Callback(self.display_animated_gif, frames, delays)
-                else:
-                    img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS))
-                    print(path)
-                    return Callback(self.display_image, img)
-            except (OSError, FileNotFoundError, IOError) as e:  # May not be real image, File no longer there, IO problem
-                print(type(e).__name__, e, file=stderr)
+            for i in itertools.count(1):
+                frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS)))
+                delays.append(img.info["duration"])
+                img.seek(i)
+        except EOFError:
+            if len(frames) == 1:
+                return partial(self.display_image, frames[0])
+            else:
+                return partial(self.display_animated_gif, frames, delays)
 
-    def add_callbacks(self, n):
-        for path in self.path_seq:
-            callback = self.get_callback(path)
-            if callback:
-                self.callbacks.append(callback)
-                n -= 1
-                if n == 0:
-                    break
+    def get_media_callable(self):
+        path = self.media_path_provider.get_next_path()
+        match mimetypes.guess_type(path)[0]:
+            case "image/gif":
+                return self.create_gif_callable(path)
+            case image if image.startswith("image/"):
+                return self.create_image_callable(path)
+            case video if video.startswith("video/"):
+                return partial(self.play_video, path)
 
     def display_media(self):
-        try:
-            if self.index < len(self.history):
-                callback = self.history[self.index]
-                self.index += 1
+        if self.index < len(self.history):
+            media_callable = self.history[self.index]
+            self.index += 1
+        else:
+            media_callable = self.get_media_callable()
+            if not media_callable:
+                self.destroy()
+                return
+            self.history.append(media_callable)
+            if len(self.history) > HISTORY_LENGTH:
+                del self.history[0]
             else:
-                callback = self.callbacks.pop(0)
-                self.history.append(callback)
-                if len(self.history) > HISTORY_LENGTH:
-                    del self.history[0]
-                else:
-                    self.index += 1
-        except IndexError:  # Finished
-            self.destroy()
-            return
-
-        self.callback = callback.run()
-        if len(self.callbacks) < CALLBACK_BUFFER_SIZE:
-            self.add_callbacks(2)
+                self.index += 1
+        self.schedule_id = media_callable()
 
 
 def main(paths, image_time, no_video, no_gif):
