@@ -31,28 +31,32 @@ def positive_int(string):
     return x
 
 
-def fs_walk(path):
-    def onerror(e):
-        raise e
-    for root, dirs, files in os.walk(path, onerror=onerror):
-        yield root, dirs, map(partial(os.path.join, root), files)
-
-
-class MediaPathProvider:
-    def __init__(self, is_valid_media):
+class RandomMediaPathProvider:
+    def __init__(self, it, after, media_walk):
+        def populate(it, after):
+            def add(count, value):
+                self.keys.append(self.count)
+                self.values.append(value)
+                self.indices.extend(range(self.count, self.count + count))
+                self.count += count
+            try:
+                root, _, files = next(it)
+            except StopIteration:
+                return
+            count = sum(1 for _ in files)
+            if count:
+                add(count, root)
+                after(42, populate, it, after)
+            else:
+                populate(it, after)
         self.keys = []
         self.values = []
         self.indices = []
         self.count = 0
-        self.is_valid_media = is_valid_media
+        self.media_walk = media_walk
+        populate(it, after)
 
-    def add(self, count, value):
-        self.keys.append(self.count)
-        self.values.append(value)
-        self.indices.extend(range(self.count, self.count + count))
-        self.count += count
-
-    def get_next_path(self):
+    def __iter__(self):
         def get_random():
             i = random.randrange(self.count)
             self.count -= 1
@@ -60,18 +64,14 @@ class MediaPathProvider:
             n = self.indices.pop() + 1
             key = bisect.bisect(self.keys, n) - 1
             return n - self.keys[key], self.values[key]
-        if self.count:
-            target, dir = get_random()
-            root, _, files = next(fs_walk(dir))
-            count = 0
-            for path in files:
-                count += self.is_valid_media(path)
-                if count == target:
-                    return path
+        while self.count:
+            target, path = get_random()
+            _, dirs, files = next(self.media_walk(path))
+            yield next(itertools.islice(files, target - 1, None))
 
 
 class Screensaver(Tk):
-    def __init__(self, paths, image_time, no_video, no_gif):
+    def __init__(self, paths, image_time, randomize, no_video, no_gif):
         super().__init__()
         self.history = []
         self.index = 0
@@ -86,7 +86,7 @@ class Screensaver(Tk):
         self.configure(background="black")
         self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
-        self.create_media_path_provider(paths)
+        self.path_iter = self.get_path_iter(paths, randomize)
         if not self.no_video:
             self.video_player = vlc.MediaPlayer()
             self.video_player.set_fullscreen(True)
@@ -122,6 +122,12 @@ class Screensaver(Tk):
         self.video_player.stop()
         self.display_media()
 
+    def media_walk(self, path):
+        def onerror(e):
+            raise e
+        for root, dirs, files in os.walk(path, onerror=onerror):
+            yield root, dirs, filter(self.is_valid_media, map(partial(os.path.join, root), files))
+
     def is_valid_media(self, path):
         match mimetypes.guess_type(path)[0]:
             case None:
@@ -135,21 +141,18 @@ class Screensaver(Tk):
             case _:
                 return False
 
-    def create_media_path_provider(self, paths):
-        def _create_media_path_provider(it):
-            try:
-                root, _, files = next(it)
-            except StopIteration:
-                return
-            count = sum(map(self.is_valid_media, files))
-            if count:
-                self.media_path_provider.add(count, root)
-                self.after(42, _create_media_path_provider, it)
-            else:
-                _create_media_path_provider(it)
-        it = itertools.chain.from_iterable(map(fs_walk, paths))
-        self.media_path_provider = MediaPathProvider(self.is_valid_media)
-        _create_media_path_provider(it)
+    def get_path_iter(self, paths, randomize):
+        def ordered_media_paths(it):
+            for _, dirs, files in it:
+                dirs.sort()
+                yield from sorted(files)
+        if randomize:
+            random.shuffle(paths)
+            it = itertools.chain.from_iterable(map(self.media_walk, paths))
+            return iter(RandomMediaPathProvider(it, self.after, self.media_walk))
+        else:
+            it = itertools.chain.from_iterable(map(self.media_walk, paths))
+            return ordered_media_paths(it)
 
     def display_image(self, image):
         self.panel.configure(image=image)
@@ -195,8 +198,7 @@ class Screensaver(Tk):
             else:
                 return partial(self.display_animated_gif, frames, delays)
 
-    def get_media_callable(self):
-        path = self.media_path_provider.get_next_path()
+    def get_media_callable(self, path):
         match mimetypes.guess_type(path)[0]:
             case "image/gif":
                 return self.create_gif_callable(path)
@@ -210,10 +212,12 @@ class Screensaver(Tk):
             media_callable = self.history[self.index]
             self.index += 1
         else:
-            media_callable = self.get_media_callable()
-            if not media_callable:
+            try:
+                path = next(self.path_iter)
+            except StopIteration:
                 self.destroy()
                 return
+            media_callable = self.get_media_callable(path)
             self.history.append(media_callable)
             if len(self.history) > HISTORY_LENGTH:
                 del self.history[0]
@@ -222,17 +226,18 @@ class Screensaver(Tk):
         self.schedule_id = media_callable()
 
 
-def main(paths, image_time, no_video, no_gif):
-    screensaver = Screensaver(paths, image_time, no_video, no_gif)
+def main(paths, image_time, randomize, no_video, no_gif):
+    screensaver = Screensaver(paths, image_time, randomize, no_video, no_gif)
     screensaver.mainloop()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Screensaver program that supports video (with audio) and animated gifs")
     parser.add_argument("-t", "--image_time", type=positive_int, help="The time in milliseconds that each image will persist")
+    parser.add_argument("--randomize", help="Randomize viewing order", action="store_true")
     parser.add_argument("--no-video", help="Skip over videos", action="store_true")
     parser.add_argument("--no-gif", help="Skip over gifs", action="store_true")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
 
-    main(args.paths, args.image_time or DEFAULT_TIME, args.no_video, args.no_gif)
+    main(args.paths, args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif)
