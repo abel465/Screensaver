@@ -84,6 +84,7 @@ class Screensaver(Tk):
         self.bind("<Left>", lambda e: self.previous_media())
         self.bind("<Right>", lambda e: self.next_media())
         self.attributes("-fullscreen", True)
+        self.geometry(f"{self.width}x{self.height}")
         self.configure(background="black")
         self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
