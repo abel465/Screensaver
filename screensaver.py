@@ -72,7 +72,7 @@ class RandomMediaPathProvider:
 
 
 class Screensaver(Tk):
-    def __init__(self, paths, image_time, randomize, no_video, no_gif):
+    def __init__(self, paths, image_time, randomize, no_video, no_gif, mute):
         super().__init__()
         self.history = []
         self.index = 0
@@ -89,7 +89,7 @@ class Screensaver(Tk):
         self.panel.pack(expand=True)
         self.path_iter = self.get_path_iter(paths, randomize)
         if not self.no_video:
-            self.video_player = vlc.MediaPlayer()
+            self.video_player = vlc.MediaPlayer(vlc.Instance("--aout=adummy" if mute else ""))
             self.video_player.set_fullscreen(True)
             if _isWindows:
                 self.video_player.set_hwnd(self.panel.winfo_id())
@@ -227,8 +227,8 @@ class Screensaver(Tk):
         self.schedule_id = media_callable()
 
 
-def main(paths, image_time, randomize, no_video, no_gif):
-    screensaver = Screensaver(paths, image_time, randomize, no_video, no_gif)
+def main(paths, image_time, randomize, no_video, no_gif, mute):
+    screensaver = Screensaver(paths, image_time, randomize, no_video, no_gif, mute)
     screensaver.mainloop()
 
 
@@ -238,7 +238,8 @@ if __name__ == "__main__":
     parser.add_argument("--randomize", help="Randomize viewing order", action="store_true")
     parser.add_argument("--no-video", help="Skip over videos", action="store_true")
     parser.add_argument("--no-gif", help="Skip over gifs", action="store_true")
+    parser.add_argument("--mute", help="Disable video audio", action="store_true")
     parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
     args = parser.parse_args()
 
-    main(args.paths, args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif)
+    main(args.paths, args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif, args.mute)
