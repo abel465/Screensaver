@@ -179,7 +179,7 @@ class Screensaver(Tk):
         w, h = img.size
         ratio = min(self.width/w, self.height/h)
         size = (int(ratio*w), int(ratio*h))
-        img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS))
+        img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.Resampling.LANCZOS))
         return partial(self.display_image, img)
 
     def create_gif_callable(self, path):
@@ -191,7 +191,7 @@ class Screensaver(Tk):
         delays = []
         try:
             for i in itertools.count(1):
-                frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.ANTIALIAS)))
+                frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.Resampling.LANCZOS)))
                 delays.append(img.info["duration"])
                 img.seek(i)
         except EOFError:
