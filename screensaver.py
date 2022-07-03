@@ -68,7 +68,7 @@ class RandomMediaPathProvider:
         while self.count:
             target, path = get_random()
             _, dirs, files = next(self.media_walk(path))
-            yield next(itertools.islice(files, target - 1, None))
+            yield next(itertools.islice(files, target, None))
 
 
 class Screensaver(Tk):
