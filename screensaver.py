@@ -63,12 +63,12 @@ class RandomMediaPathProvider:
             self.count -= 1
             self.indices[i], self.indices[-1] = self.indices[-1], self.indices[i]
             n = self.indices.pop() + 1
-            key = bisect.bisect(self.keys, n) - 1
+            key = bisect.bisect(self.keys, n - 1) - 1
             return n - self.keys[key], self.values[key]
         while self.count:
             target, path = get_random()
             _, dirs, files = next(self.media_walk(path))
-            yield next(itertools.islice(files, target, None))
+            yield from itertools.islice(files, target - 1, target)
 
 
 class Screensaver(Tk):
@@ -144,15 +144,15 @@ class Screensaver(Tk):
                 return False
 
     def get_path_iter(self, paths, randomize):
-        def ordered_media_paths(it):
-            for _, dirs, files in it:
-                dirs.sort()
-                yield from sorted(files)
         if randomize:
             random.shuffle(paths)
             it = itertools.chain.from_iterable(map(self.media_walk, paths))
             return iter(RandomMediaPathProvider(it, self.after, self.media_walk))
         else:
+            def ordered_media_paths(it):
+                for _, dirs, files in it:
+                    dirs.sort()
+                    yield from sorted(files)
             it = itertools.chain.from_iterable(map(self.media_walk, paths))
             return ordered_media_paths(it)
 
