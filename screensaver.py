@@ -249,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-video", help="Skip over videos", action="store_true")
     parser.add_argument("--no-gif", help="Skip over gifs", action="store_true")
     parser.add_argument("--mute", help="Disable video audio", action="store_true")
-    parser.add_argument("paths", nargs="+", help="A path for the screensaver to show media of")
+    parser.add_argument("paths", nargs="*", help="A path for the screensaver to show media of")
     args = parser.parse_args()
 
-    main(args.paths, args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif, args.mute)
+    main(args.paths or [os.getcwd()], args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif, args.mute)
