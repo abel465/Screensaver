@@ -127,7 +127,10 @@ class Screensaver(Tk):
 
     def media_walk(self, path):
         def onerror(e):
-            raise e
+            if isinstance(e, PermissionError):
+                print(e)
+            else:
+                raise e
         for root, dirs, files in os.walk(path, onerror=onerror):
             yield root, dirs, filter(self.is_valid_media, map(partial(os.path.join, root), files))
 
