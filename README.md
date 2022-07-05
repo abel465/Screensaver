@@ -8,6 +8,8 @@ Screensaver program that supports video (with audio) and animated gifs
 * [Pillow](https://pypi.org/project/Pillow/)
 * [vlc](https://github.com/videolan/vlc)
 * [python-vlc](https://pypi.org/project/python-vlc/)
+* [cairosvg](https://cairosvg.org/)
+
 ### Usage
 
 * cli

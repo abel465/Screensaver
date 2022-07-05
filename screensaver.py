@@ -6,6 +6,7 @@ import PIL.ImageTk, PIL.ImageFile, PIL.Image
 from functools import partial
 import mimetypes
 import itertools
+import cairosvg
 import bisect
 import random
 import time
@@ -181,6 +182,17 @@ class Screensaver(Tk):
         size = (int(ratio*w), int(ratio*h))
         img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.Resampling.LANCZOS))
         return partial(self.display_image, img)
+    
+    def create_svg_callable(self, path):
+        def get_ratio():
+            out = cairosvg.image.BytesIO()
+            cairosvg.svg2eps(url=path, write_to=out)
+            w, h = PIL.Image.open(out).size
+            return min(self.width/w, self.height/h)
+        out = cairosvg.image.BytesIO()
+        cairosvg.svg2eps(url=path, write_to=out, scale=get_ratio())
+        img = PIL.ImageTk.PhotoImage(PIL.Image.open(out))
+        return partial(self.display_image, img)
 
     def create_gif_callable(self, path):
         img = PIL.Image.open(path)
@@ -204,6 +216,8 @@ class Screensaver(Tk):
         match mimetypes.guess_type(path)[0]:
             case "image/gif":
                 return self.create_gif_callable(path)
+            case "image/svg+xml":
+                return self.create_svg_callable(path)
             case image if image.startswith("image/"):
                 return self.create_image_callable(path)
             case video if video.startswith("video/"):
