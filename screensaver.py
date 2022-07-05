@@ -40,17 +40,12 @@ class RandomMediaPathProvider:
                 self.values.append(value)
                 self.indices.extend(range(self.count, self.count + count))
                 self.count += count
-            try:
-                root, dirs, files = next(it)
-            except StopIteration:
-                return
-            random.shuffle(dirs)
-            count = sum(1 for _ in files)
-            if count:
-                add(count, root)
-                after(42, populate, it, after)
-            else:
-                populate(it, after)
+            for root, dirs, files in it:
+                random.shuffle(dirs)
+                count = sum(1 for _ in files)
+                if count:
+                    add(count, root)
+                    return after(42, populate, it, after)
         self.keys = []
         self.values = []
         self.indices = []
