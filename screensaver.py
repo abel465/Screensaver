@@ -102,10 +102,7 @@ class Screensaver(Tk):
 
     def previous_media(self):
         self.index = max(0, self.index - 2)
-        self.after_cancel(self.schedule_id)
-        if not self.no_video:
-            self.video_player.stop()
-        self.display_media()
+        self.next_media()
 
     def play_video(self, path):
         media = vlc.Media(path)
