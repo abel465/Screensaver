@@ -179,15 +179,16 @@ class Screensaver(Tk):
         return partial(self.display_image, img)
     
     def create_svg_callable(self, path):
-        def get_ratio():
+        with open(path, "rb") as file:
+            def get_ratio():
+                out = cairosvg.image.BytesIO()
+                cairosvg.svg2eps(file_obj=file, write_to=out)
+                w, h = PIL.Image.open(out).size
+                return min(self.width/w, self.height/h)
             out = cairosvg.image.BytesIO()
-            cairosvg.svg2eps(url=path, write_to=out)
-            w, h = PIL.Image.open(out).size
-            return min(self.width/w, self.height/h)
-        out = cairosvg.image.BytesIO()
-        cairosvg.svg2eps(url=path, write_to=out, scale=get_ratio())
-        img = PIL.ImageTk.PhotoImage(PIL.Image.open(out))
-        return partial(self.display_image, img)
+            cairosvg.svg2eps(file_obj=file, write_to=out, scale=get_ratio())
+            img = PIL.ImageTk.PhotoImage(PIL.Image.open(out))
+            return partial(self.display_image, img)
 
     def create_gif_callable(self, path):
         img = PIL.Image.open(path)
