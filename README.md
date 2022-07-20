@@ -9,6 +9,7 @@ Screensaver program that supports video (with audio) and animated gifs
 * [vlc](https://github.com/videolan/vlc)
 * [python-vlc](https://pypi.org/project/python-vlc/)
 * [cairosvg](https://cairosvg.org/)
+* [pyheif](https://pypi.org/project/pyheif/)
 
 ### Usage
 

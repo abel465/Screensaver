@@ -9,6 +9,7 @@ import itertools
 import cairosvg
 import bisect
 import random
+import pyheif
 import time
 import sys
 import vlc
@@ -170,13 +171,27 @@ class Screensaver(Tk):
         self.schedule_id = self.after(delays[i], self._display_animated_gif, frames, delays, begin_time, i+1)
         return self.schedule_id
 
-    def create_image_callable(self, path):
-        img = PIL.Image.open(path)
+    def image_callable_from_PIL_Image(self, img):
         w, h = img.size
         ratio = min(self.width/w, self.height/h)
         size = (int(ratio*w), int(ratio*h))
         img = PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.Resampling.LANCZOS))
         return partial(self.display_image, img)
+
+    def create_image_callable(self, path):
+        return self.image_callable_from_PIL_Image(PIL.Image.open(path))
+
+    def create_av1_image_callable(self, path):
+        heif_file = pyheif.read(path)
+        return self.image_callable_from_PIL_Image(
+            PIL.Image.frombytes(
+                heif_file.mode,
+                heif_file.size,
+                heif_file.data,
+                "raw",
+                heif_file.mode,
+                heif_file.stride)
+        )
     
     def create_svg_callable(self, path):
         with open(path, "rb") as file:
@@ -214,6 +229,8 @@ class Screensaver(Tk):
                 return self.create_gif_callable(path)
             case "image/svg+xml":
                 return self.create_svg_callable(path)
+            case "image/avif" | "image/heic":
+                return self.create_av1_image_callable(path)
             case image if image.startswith("image/"):
                 return self.create_image_callable(path)
             case video if video.startswith("video/"):
