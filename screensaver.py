@@ -33,6 +33,10 @@ def positive_int(string):
     return x
 
 
+def open_image(fp):
+    return PIL.ImageOps.exif_transpose(PIL.Image.open(fp))
+
+
 class RandomMediaPathProvider:
     def __init__(self, it, after, media_walk):
         def populate(it, after):
@@ -179,7 +183,7 @@ class Screensaver(Tk):
         return partial(self.display_image, img)
 
     def create_image_callable(self, path):
-        return self.image_callable_from_PIL_Image(PIL.Image.open(path))
+        return self.image_callable_from_PIL_Image(open_image(path))
 
     def create_av1_image_callable(self, path):
         heif_file = pyheif.read(path)
@@ -192,21 +196,21 @@ class Screensaver(Tk):
                 heif_file.mode,
                 heif_file.stride)
         )
-    
+
     def create_svg_callable(self, path):
         with open(path, "rb") as file:
             def get_ratio():
                 out = cairosvg.image.BytesIO()
                 cairosvg.svg2eps(file_obj=file, write_to=out)
-                w, h = PIL.Image.open(out).size
+                w, h = open_image(out).size
                 return min(self.width/w, self.height/h)
             out = cairosvg.image.BytesIO()
             cairosvg.svg2eps(file_obj=file, write_to=out, scale=get_ratio())
-            img = PIL.ImageTk.PhotoImage(PIL.Image.open(out))
+            img = PIL.ImageTk.PhotoImage(open_image(out))
             return partial(self.display_image, img)
 
     def create_gif_callable(self, path):
-        img = PIL.Image.open(path)
+        img = open_image(path)
         w, h = img.size
         ratio = min(self.width/w, self.height/h)
         size = (int(ratio*w), int(ratio*h))
