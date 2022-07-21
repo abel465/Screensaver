@@ -19,6 +19,7 @@ PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 HISTORY_LENGTH = 50
 DEFAULT_TIME = 2000
+CURSOR_HIDE_DELAY = 500
 
 _isWindows = sys.platform.startswith('win')
 
@@ -77,16 +78,18 @@ class Screensaver(Tk):
         super().__init__()
         self.history = []
         self.index = 0
+        self.motion_after_id = None
         self.image_time = image_time
         self.no_video = no_video
         self.no_gif = no_gif
         self.width, self.height = self.winfo_screenwidth(), self.winfo_screenheight()
         self.bind("<Key>", lambda e: e.widget.quit())
-        self.bind("<Left>", lambda e: self.previous_media())
-        self.bind("<Right>", lambda e: self.next_media())
+        self.bind("<Left>", lambda _: self.previous_media())
+        self.bind("<Right>", lambda _: self.next_media())
+        self.bind('<Motion>', self.on_cursor_movement)
         self.attributes("-fullscreen", True)
         self.geometry(f"{self.width}x{self.height}")
-        self.configure(background="black")
+        self.configure(background="black", cursor="none")
         self.panel = Label(self, border=0, background="black", width=self.width, height=self.height)
         self.panel.pack(expand=True)
         self.path_iter = self.get_path_iter(paths, randomize)
@@ -98,6 +101,12 @@ class Screensaver(Tk):
             else:
                 self.video_player.set_xwindow(self.panel.winfo_id())
         self.display_media()
+    
+    def on_cursor_movement(self, _):
+        if self.motion_after_id:
+            self.after_cancel(self.motion_after_id)
+            self.configure(cursor="arrow")
+        self.motion_after_id = self.after(CURSOR_HIDE_DELAY, lambda: self.configure(cursor="none"))
 
     def next_media(self):
         self.after_cancel(self.schedule_id)
