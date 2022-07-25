@@ -69,7 +69,7 @@ class RandomMediaPathProvider:
             return n - self.keys[key], self.values[key]
         while self.count:
             target, path = get_random()
-            _, dirs, files = next(self.media_walk(path))
+            _, _, files = next(self.media_walk(path))
             yield from itertools.islice(files, target - 1, target)
 
 
@@ -161,8 +161,8 @@ class Screensaver(Tk):
         else:
             def ordered_media_paths(it):
                 for _, dirs, files in it:
-                    dirs.sort()
-                    yield from sorted(files)
+                    dirs.sort(key=os.path.getmtime)
+                    yield from sorted(files, key=os.path.getmtime)
             it = itertools.chain.from_iterable(map(self.media_walk, paths))
             return ordered_media_paths(it)
 
@@ -197,13 +197,13 @@ class Screensaver(Tk):
     def create_av1_image_callable(self, path):
         heif_file = pyheif.read(path)
         return self.image_callable_from_PIL_Image(
-            PIL.Image.frombytes(
-                heif_file.mode,
-                heif_file.size,
-                heif_file.data,
-                "raw",
-                heif_file.mode,
-                heif_file.stride)
+                PIL.Image.frombytes(
+                    heif_file.mode,
+                    heif_file.size,
+                    heif_file.data,
+                    "raw",
+                    heif_file.mode,
+                    heif_file.stride)
         )
 
     def create_svg_callable(self, path):
