@@ -197,13 +197,14 @@ class Screensaver(Tk):
     def create_av1_image_callable(self, path):
         heif_file = pyheif.read(path)
         return self.image_callable_from_PIL_Image(
+            PIL.ImageOps.exif_transpose(
                 PIL.Image.frombytes(
                     heif_file.mode,
                     heif_file.size,
                     heif_file.data,
                     "raw",
                     heif_file.mode,
-                    heif_file.stride)
+                    heif_file.stride))
         )
 
     def create_svg_callable(self, path):
