@@ -260,7 +260,12 @@ class Screensaver(Tk):
             except StopIteration:
                 self.destroy()
                 return
-            media_callable = self.get_media_callable(path)
+            try:
+                media_callable = self.get_media_callable(path)
+            except PIL.UnidentifiedImageError as e:
+                print(e)
+                self.display_media()
+                return
             self.history.append(media_callable)
             if len(self.history) > HISTORY_LENGTH:
                 del self.history[0]
