@@ -160,8 +160,8 @@ class Screensaver(Tk):
             return iter(RandomMediaPathProvider(it, self.after, self.media_walk))
         else:
             def ordered_media_paths(it):
-                for _, dirs, files in it:
-                    dirs.sort(key=os.path.getmtime)
+                for root, dirs, files in it:
+                    dirs.sort(key=lambda file: os.path.getmtime(os.path.join(root, file)))
                     yield from sorted(files, key=os.path.getmtime)
             it = itertools.chain.from_iterable(map(self.media_walk, paths))
             return ordered_media_paths(it)
