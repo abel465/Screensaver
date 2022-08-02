@@ -231,7 +231,7 @@ class Screensaver(Tk):
                 frames.append(PIL.ImageTk.PhotoImage(img.resize(size, PIL.Image.Resampling.LANCZOS)))
                 delays.append(img.info["duration"])
                 img.seek(i)
-        except EOFError:
+        except (EOFError, KeyError):
             if len(frames) == 1:
                 return partial(self.display_image, frames[0])
             else:
