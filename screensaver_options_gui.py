@@ -1,6 +1,7 @@
 import tkinter as tk
 import tkinter.filedialog as tk_filedialog
 import json
+import datetime
 import screensaver
 from options import Options
 
@@ -76,13 +77,20 @@ def main():
     if options_gui.finished:
         with open(options_file, "w") as f:
             json.dump(options, f, default=lambda x: x.__dict__)
-        screensaver.main(
-            options.paths,
-            options.image_time,
-            options.randomize,
-            options.no_video,
-            options.no_gif,
-            options.mute)
+        try:
+            screensaver.main(
+                options.paths,
+                options.image_time,
+                options.randomize,
+                options.no_video,
+                options.no_gif,
+                options.mute)
+        except Exception as e:
+            t = datetime.datetime.now()
+            with open(f"screensaver_crash_log_{t.date()}_{t.time()}", "w") as f:
+                f.write(t)
+                f.write("\n")
+                f.write(e)
 
 
 if __name__ == "__main__":
