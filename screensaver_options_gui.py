@@ -16,6 +16,7 @@ class Options:
             self.randomize = False
             self.no_video = False
             self.no_gif = False
+            self.mute = False
 
 
 class ScreensaverOptionsGUI(tk.Tk):
@@ -27,6 +28,7 @@ class ScreensaverOptionsGUI(tk.Tk):
         self.no_video = tk.BooleanVar(value=options.no_video)
         self.no_gif = tk.BooleanVar(value=options.no_gif)
         self.randomize = tk.BooleanVar(value=options.randomize)
+        self.mute = tk.BooleanVar(value=options.mute)
         self.image_time = tk.IntVar(value=options.image_time)
         self.folder_name = tk.StringVar(value=options.paths[0])
 
@@ -55,9 +57,11 @@ class ScreensaverOptionsGUI(tk.Tk):
             .grid(row=1, column=0)
         tk.Checkbutton(checkbox_frame, text="randomize", variable=self.randomize, anchor=tk.W) \
             .grid(row=2, column=0)
+        tk.Checkbutton(checkbox_frame, text="mute", variable=self.mute, anchor=tk.W) \
+            .grid(row=3, column=0)
 
         tk.Button(frame, text="go", command=self.done, anchor=tk.SE) \
-            .grid(row=3, column=1)
+            .grid(row=4, column=1)
 
     def choose_folder(self):
         self.folder_name.set(
@@ -69,6 +73,7 @@ class ScreensaverOptionsGUI(tk.Tk):
         self.options.randomize = self.randomize.get()
         self.options.no_video = self.no_video.get()
         self.options.no_gif = self.no_gif.get()
+        self.options.mute = self.mute.get()
         self.finished = True
         self.destroy()
 
@@ -90,7 +95,8 @@ def main():
             options.image_time,
             options.randomize,
             options.no_video,
-            options.no_gif)
+            options.no_gif,
+            options.mute)
 
 
 if __name__ == "__main__":
