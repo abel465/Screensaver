@@ -3,6 +3,7 @@
 import json
 import screensaver
 import datetime
+import traceback
 from options import Options
 
 
@@ -24,9 +25,7 @@ def main():
     except Exception as e:
         t = datetime.datetime.now()
         with open(f"screensaver_crash_log_{t.date()}_{t.time()}", "w") as f:
-            f.write(t)
-            f.write("\n")
-            f.write(e)
+            f.write(traceback.format_exc())
 
 
 if __name__ == "__main__":
