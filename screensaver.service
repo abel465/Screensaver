@@ -1,0 +1,11 @@
+[Unit]
+Description=Starts the screensaver when idle
+After=network.target
+
+[Service]
+KillMode=process
+WorkingDirectory={dir}/
+ExecStart={dir}/screensaver_service.sh
+
+[Install]
+WantedBy=default.target

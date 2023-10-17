@@ -2,6 +2,7 @@
 
 import tkinter as tk
 import tkinter.filedialog as tk_filedialog
+import os
 import json
 import datetime
 import traceback
@@ -11,7 +12,8 @@ from options import Options
 
 
 def enable_autodisplay():
-    return call('which systemctl', shell=True) == 0
+    return call('which systemctl', shell=True) == 0 \
+        and ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ)
 
 
 class ScreensaverOptionsGUI(tk.Tk):
@@ -67,6 +69,14 @@ class ScreensaverOptionsGUI(tk.Tk):
 
     def on_autodisplay(self):
         if self.autodisplay.get():
+            if not os.path.isfile('~/.config/systemd/user/screensaver.service'):
+                call('mkdir -p ~/.config/systemd/user/', shell=True)
+                with open('screensaver.service', 'r') as file:
+                    data = file.read()
+                dir = os.path.dirname(os.path.realpath(__file__))
+                data = data.replace("{dir}", dir)
+                with open(f'{os.path.expanduser("~")}/.config/systemd/user/screensaver.service', 'w') as file:
+                    file.write(data)
             call('systemctl start --user screensaver.service', shell=True)
             call('systemctl enable --user screensaver.service', shell=True)
         else:
