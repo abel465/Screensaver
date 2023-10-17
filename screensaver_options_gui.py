@@ -8,11 +8,12 @@ import datetime
 import traceback
 import screensaver
 from subprocess import call
+from subprocess import DEVNULL
 from options import Options
 
 
 def enable_autodisplay():
-    return call('which systemctl', shell=True) == 0 \
+    return call('which systemctl', stdout=DEVNULL, shell=True) == 0 \
         and ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ)
 
 
