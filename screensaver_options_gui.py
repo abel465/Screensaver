@@ -10,6 +10,10 @@ from subprocess import call
 from options import Options
 
 
+def enable_autodisplay():
+    return call('which systemctl', shell=True) == 0
+
+
 class ScreensaverOptionsGUI(tk.Tk):
     def __init__(self, options):
         super().__init__()
@@ -51,7 +55,7 @@ class ScreensaverOptionsGUI(tk.Tk):
             .grid(row=2, column=0)
         tk.Checkbutton(checkbox_frame, text="mute", variable=self.mute, anchor=tk.W) \
             .grid(row=3, column=0)
-        tk.Checkbutton(checkbox_frame, text="autodisplay", variable=self.autodisplay, command=self.on_autodisplay) \
+        tk.Checkbutton(checkbox_frame, text="autodisplay", variable=self.autodisplay, command=self.on_autodisplay, state="normal" if enable_autodisplay() else "disable") \
             .grid(row=4, column=0, columnspan=2)
 
         tk.Button(frame, text="go", command=self.done, anchor=tk.SE) \
