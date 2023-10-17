@@ -13,3 +13,4 @@ class Options:
             self.no_video = False
             self.no_gif = False
             self.mute = False
+            self.autodisplay = False

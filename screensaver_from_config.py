@@ -22,7 +22,7 @@ def main():
             options.no_video,
             options.no_gif,
             options.mute)
-    except Exception as e:
+    except Exception:
         t = datetime.datetime.now()
         with open(f"screensaver_crash_log_{t.date()}_{t.time()}", "w") as f:
             f.write(traceback.format_exc())

@@ -6,6 +6,7 @@ import json
 import datetime
 import traceback
 import screensaver
+from subprocess import call
 from options import Options
 
 
@@ -19,6 +20,7 @@ class ScreensaverOptionsGUI(tk.Tk):
         self.no_gif = tk.BooleanVar(value=options.no_gif)
         self.randomize = tk.BooleanVar(value=options.randomize)
         self.mute = tk.BooleanVar(value=options.mute)
+        self.autodisplay = tk.BooleanVar(value=options.autodisplay)
         self.image_time = tk.IntVar(value=options.image_time)
         self.folder_name = tk.StringVar(value=options.paths[0])
 
@@ -49,13 +51,24 @@ class ScreensaverOptionsGUI(tk.Tk):
             .grid(row=2, column=0)
         tk.Checkbutton(checkbox_frame, text="mute", variable=self.mute, anchor=tk.W) \
             .grid(row=3, column=0)
+        tk.Checkbutton(checkbox_frame, text="autodisplay", variable=self.autodisplay, command=self.on_autodisplay) \
+            .grid(row=4, column=0, columnspan=2)
 
         tk.Button(frame, text="go", command=self.done, anchor=tk.SE) \
-            .grid(row=4, column=1)
+            .grid(row=5, column=1)
 
     def choose_folder(self):
         self.folder_name.set(
             tk_filedialog.askdirectory(initialdir=self.folder_name.get()))
+
+    def on_autodisplay(self):
+        if self.autodisplay.get():
+            call('systemctl start --user screensaver.service', shell=True)
+            call('systemctl enable --user screensaver.service', shell=True)
+        else:
+            call('systemctl stop --user screensaver.service', shell=True)
+            call('systemctl disable --user screensaver.service', shell=True)
+        call('systemctl status --user screensaver.service', shell=True)
 
     def done(self):
         self.options.paths = (self.folder_name.get(),)
@@ -64,6 +77,7 @@ class ScreensaverOptionsGUI(tk.Tk):
         self.options.no_video = self.no_video.get()
         self.options.no_gif = self.no_gif.get()
         self.options.mute = self.mute.get()
+        self.options.autodisplay = self.autodisplay.get()
         self.finished = True
         self.destroy()
 
@@ -88,7 +102,7 @@ def main():
                 options.no_video,
                 options.no_gif,
                 options.mute)
-        except Exception as e:
+        except Exception:
             t = datetime.datetime.now()
             with open(f"screensaver_crash_log_{t.date()}_{t.time()}", "w") as f:
                 f.write(traceback.format_exc())
