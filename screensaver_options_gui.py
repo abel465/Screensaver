@@ -12,13 +12,9 @@ from options import Options
 
 
 def enable_autodisplay():
-    return call('which systemctl', stdout=DEVNULL, shell=True) == 0 \
-        and is_x11()
-
-
-def is_x11():
-    t = getoutput('loginctl show-session $(loginctl | grep "$USER" | awk \'{print $1}\') -p Type')[5:]
-    return t == "x11"
+    display_type = getoutput('loginctl show-session $(loginctl | grep "$USER" | awk \'{print $1}\') -p Type')[5:]
+    return (display_type == 'x11' and call('which systemctl xwininfo xprintidle', stdout=DEVNULL, shell=True) == 0) \
+        or (display_type == 'wayland' and call('which systemctl swayidle', stdout=DEVNULL, shell=True) == 0)
 
 
 class ScreensaverOptionsGUI(tk.Tk):

@@ -3,7 +3,7 @@ Description=Starts the screensaver when idle
 After=network.target
 
 [Service]
-KillMode=process
+KillMode=control-group
 WorkingDirectory={dir}/
 ExecStart={dir}/screensaver_service.sh
 
