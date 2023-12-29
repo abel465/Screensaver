@@ -29,5 +29,8 @@
             ghostscript_headless
           ];
         };
+
+      packages.default = pkgs.callPackage ./default.nix {inherit python;};
+      apps.${system}.default = "${pkgs.default}/bin/screensaver";
     });
 }
