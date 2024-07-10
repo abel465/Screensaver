@@ -1,6 +1,8 @@
 # Screensaver
 Screensaver program that supports video (with audio) and animated gifs
 
+### Superseded by [abelscreensaver](https://github.com/abel465/abelscreensaver)
+
 ### Dependencies
 
 * [python3](https://www.python.org/)
