@@ -27,6 +27,7 @@
           buildInputs = [
             python
             ghostscript_headless
+            swayidle
           ];
         };
 
