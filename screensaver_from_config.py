@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import json
-import screensaver
+import screensaver_raw
 import datetime
 import traceback
 from options import Options
@@ -15,7 +15,7 @@ def main():
     except FileNotFoundError:
         options = Options()
     try:
-        screensaver.main(
+        screensaver_raw.main(
             options.paths,
             options.image_time,
             options.randomize,

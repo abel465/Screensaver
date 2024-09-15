@@ -6,7 +6,7 @@ import os
 import json
 import datetime
 import traceback
-import screensaver
+import screensaver_raw
 from subprocess import call, getoutput, DEVNULL
 from options import Options
 
@@ -110,7 +110,7 @@ def main():
         with open(options_file, "w") as f:
             json.dump(options, f, default=lambda x: x.__dict__)
         try:
-            screensaver.main(
+            screensaver_raw.main(
                 options.paths,
                 options.image_time,
                 options.randomize,

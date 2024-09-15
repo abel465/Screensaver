@@ -275,7 +275,7 @@ class Screensaver(Tk):
 
 
 def main(paths, image_time, randomize, no_video, no_gif, mute):
-    screensaver = Screensaver(paths, image_time, randomize, no_video, no_gif, mute)
+    screensaver = Screensaver(paths, image_time or DEFAULT_TIME, randomize, no_video, no_gif, mute)
     screensaver.mainloop()
 
 
@@ -289,4 +289,4 @@ if __name__ == "__main__":
     parser.add_argument("paths", nargs="*", help="A path for the screensaver to show media of")
     args = parser.parse_args()
 
-    main(args.paths or [os.getcwd()], args.image_time or DEFAULT_TIME, args.randomize, args.no_video, args.no_gif, args.mute)
+    main(args.paths or [os.getcwd()], args.image_time, args.randomize, args.no_video, args.no_gif, args.mute)
