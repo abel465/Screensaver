@@ -22,17 +22,40 @@
           pyheif
           python-vlc
         ]);
-    in {
+    in rec {
       devShell = with pkgs;
         mkShell {
           buildInputs = [
             python
-            ghostscript_headless
             swayidle
           ];
         };
-
-      packages.default = pkgs.callPackage ./default.nix {inherit python;};
-      apps.${system}.default = "${pkgs.default}/bin/screensaver";
+      packages.default = pkgs.stdenv.mkDerivation {
+        name = "screensaver";
+        src = ./.;
+        nativeBuildInputs = [
+          pkgs.makeWrapper
+        ];
+        installPhase = ''
+          mkdir -p $out/bin
+          cp screensaver.py \
+            screensaver_raw.py \
+            screensaver_from_config.py \
+            screensaver_options_gui.py \
+            options.py \
+            screensaver.service \
+            $out
+          echo "${python}/bin/python $out/screensaver.py \$@" > $out/bin/screensaver
+          chmod +x $out/bin/screensaver
+          wrapProgram $out/bin/screensaver --prefix PATH : ${with pkgs;
+            lib.makeBinPath [
+              swayidle
+            ]}
+        '';
+      };
+      apps.default = {
+        type = "app";
+        program = "${packages.default}/bin/screensaver";
+      };
     });
 }
