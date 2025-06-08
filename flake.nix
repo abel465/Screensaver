@@ -3,7 +3,6 @@
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
   outputs = {
@@ -19,7 +18,7 @@
           tkinter
           pillow
           cairosvg
-          pyheif
+          pillow-heif
           python-vlc
         ]);
     in rec {

@@ -9,7 +9,7 @@ import itertools
 import cairosvg
 import bisect
 import random
-import pyheif
+import pillow_heif
 import time
 import sys
 import vlc
@@ -195,7 +195,7 @@ class Screensaver(Tk):
         return self.image_callable_from_PIL_Image(open_image(path))
 
     def create_av1_image_callable(self, path):
-        heif_file = pyheif.read(path)
+        heif_file = pillow_heif.open_heif(path)
         return self.image_callable_from_PIL_Image(
             PIL.ImageOps.exif_transpose(
                 PIL.Image.frombytes(
